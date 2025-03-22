@@ -3,6 +3,7 @@ import imaplib
 import email
 from email.policy import default
 from datetime import datetime
+import re
 
 from ._email_server import EmailServer
 
@@ -41,8 +42,30 @@ class Imap(EmailServer):
         subject_header = msg.get('Subject')
         date_header = msg.get('Date')
 
-        if self.email_to not in (None, to_header):
-            return None
+        # Check if the email is intended for the expected recipient
+        # For Gmail addresses, compare only the part before "+" in the email address
+        if self.email_to is not None:
+            expected_base = self.email_to.split('@')[0].split('+')[0]
+            expected_domain = self.email_to.split('@')[1]
+            
+            # Extract the actual recipient address
+            if to_header:
+                actual_email = to_header
+                # Handle case where to_header might be in format "Name <email@example.com>"
+                email_match = re.search(r'<([^>]+)>', to_header)
+                if email_match:
+                    actual_email = email_match.group(1)
+                
+                # Extract base and domain from actual email
+                if '@' in actual_email:
+                    actual_base = actual_email.split('@')[0].split('+')[0]
+                    actual_domain = actual_email.split('@')[1]
+                    
+                    # Compare base part (before "+") and domain separately
+                    if expected_base != actual_base or expected_domain != actual_domain:
+                        return None
+            else:
+                return None
 
         email_datetime = datetime.strptime(date_header.replace(' (UTC)', ''), '%a, %d %b %Y %H:%M:%S %z').timestamp()
         if email_datetime < since_timestamp:
